@@ -9,13 +9,12 @@ OUTPUT_FILE = 'output/{}-regions.png'
 
 
 for file in glob.glob(INPUT_FILES):
-    image = cv.imread(file, cv.IMREAD_COLOR)
-    mser = cv.MSER_create(_min_area=10, _delta=3)
+    image = cv.imread(file, cv.IMREAD_GRAYSCALE)
+    mser = cv.MSER_create()
     regions, boxes = mser.detectRegions(image)
 
-    result = image
-    for region in regions:
-        cv.fillPoly(result, [region], (0, 255, 0))
+    hulls = [cv.convexHull(p.reshape(-1, 1, 2)) for p in regions]
+    result = cv.polylines(image, hulls, 1, (0, 255, 0))
 
     filename = os.path.splitext(os.path.basename(file))[0]
     output_file = OUTPUT_FILE.format(filename)
