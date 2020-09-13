@@ -17,7 +17,7 @@ for file, roi in INPUT:
     for angle in ROTATIONS:
         height, width, _ = image.shape
         rotation = cv.getRotationMatrix2D(centre, angle, 1)
-        result = cv.warpAffine(image, rotation, (width, height))
+        result = cv.warpAffine(image, rotation, (width, height), flags=cv.INTER_CUBIC)
         result = result[y1:y2, x1:x2]
         output_file = OUTPUT_FILE.format(filename, angle)
         cv.imwrite(output_file, result)
