@@ -1,3 +1,5 @@
+# Plots histograms of the scaled and rotated images.
+
 from glob import glob
 import os.path
 import cv2 as cv
@@ -13,7 +15,6 @@ INPUT = [
 ]
 OUTPUT_FILE = 'results/{}-hist.png'
 HISTOGRAM_BINS = 16
-
 
 for file in [f for p in INPUT for f in glob(p)]:
     image = cv.imread(file, cv.IMREAD_GRAYSCALE)

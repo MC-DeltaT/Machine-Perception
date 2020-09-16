@@ -1,3 +1,5 @@
+# Generates scaled versions of the sample images, used for task 1 and 2.
+
 import os.path
 import cv2 as cv
 

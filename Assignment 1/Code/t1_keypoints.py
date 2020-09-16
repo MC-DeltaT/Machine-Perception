@@ -1,3 +1,5 @@
+# Visualises keypoint locations in the scaled and rotated images.
+
 from glob import glob
 import os.path
 import cv2 as cv
@@ -10,7 +12,6 @@ INPUT = [
     'results/dugong-scaled_*x.png',
     'results/dugong-rotated_*deg.png',
 ]
-HISTOGRAM_OUTPUT_FILE = 'results/{}-hist.png'
 OUTPUT_FILE = 'results/{}-keypoints.png'
 SCALE = 2
 
