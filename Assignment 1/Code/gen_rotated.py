@@ -8,7 +8,7 @@ INPUT = [
     ('data/card.png', ((51, 20), (131, 100))),
     ('data/dugong.jpg', ((360, 195), (460, 295)))
 ]
-ROTATIONS = [0, 15, 30, 45, 60, 75]
+ROTATIONS = [0, 10, 15, 20, 30, 40, 45, 50, 60, 70, 75, 80, 90]
 OUTPUT_DIR = 'generated/{}/rotated'
 OUTPUT_FILE = '{}deg.png'
 
