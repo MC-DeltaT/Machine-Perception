@@ -1,8 +1,8 @@
 # Generates scaled versions of the sample images, used for task 1 and 2.
 
+import cv2 as cv
 import os.path
 from pathlib import Path
-import cv2 as cv
 
 IMAGES = [
     ('data/card.png', ((0, 0), (-1, -1))),

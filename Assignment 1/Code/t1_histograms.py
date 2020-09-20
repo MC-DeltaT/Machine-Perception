@@ -1,11 +1,11 @@
 # Plots histograms of the scaled and rotated images.
 # gen_scaled.py and gen_rotated.py should be run before running this script.
 
+import cv2 as cv
 from glob import glob
+from matplotlib import pyplot
 import os.path
 from pathlib import Path
-import cv2 as cv
-from matplotlib import pyplot
 
 BASE_IMAGES = ['card', 'dugong']
 TRANSFORMS = ['scaled', 'rotated']

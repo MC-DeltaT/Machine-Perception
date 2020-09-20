@@ -1,11 +1,11 @@
 # Visualises Harris corners in the scaled and rotated images.
 # gen_scaled.py and gen_rotated.py should be run before running this script.
 
+import cv2 as cv
 from glob import glob
+import numpy
 import os.path
 from pathlib import Path
-import cv2 as cv
-import numpy
 
 BASE_IMAGES = [('card', 0.005), ('dugong', 0.0003)]
 TRANSFORMS = ['scaled', 'rotated']

@@ -1,11 +1,11 @@
 # Visualises the comparison of SIFT and HOG descriptors between transformed versions of the images.
 # gen_scaled.py and gen_rotated.py should be run before running this script.
 
-import os.path
-from pathlib import Path
 import cv2 as cv
 from matplotlib import pyplot
 import numpy
+import os.path
+from pathlib import Path
 
 def inverse_scale(image_size, scale, keypoint):
     T = [[1 / scale, 0],

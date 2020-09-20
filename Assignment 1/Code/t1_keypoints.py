@@ -1,10 +1,10 @@
 # Visualises keypoint locations in the scaled and rotated images.
 # gen_scaled.py and gen_rotated.py should be run before running this script.
 
+import cv2 as cv
 from glob import glob
 import os.path
 from pathlib import Path
-import cv2 as cv
 
 BASE_IMAGES = ['card', 'dugong']
 TRANSFORMS = ['scaled', 'rotated']

@@ -1,8 +1,8 @@
 # Generates rotated versions of the sample images, used for task 1 and 2.
 
+import cv2 as cv
 import os.path
 from pathlib import Path
-import cv2 as cv
 
 INPUT = [
     ('data/card.png', ((51, 20), (131, 100))),
