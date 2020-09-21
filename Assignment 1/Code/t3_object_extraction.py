@@ -48,6 +48,7 @@ for file, threshold_func in INPUTS:
     output_file = os.path.join(output_dir, OBJECTS_OUTPUT_FILE)
     cv.imwrite(output_file, result)
 
+    # TODO: some way to associate areas with objects
     objects = [list(zip(*numpy.where(labels == l))) for l in range(1, label_count)]
     with open(os.path.join(output_dir, AREAS_OUTPUT_FILE), 'w') as areas_file:
         for i, object in enumerate(objects, 1):

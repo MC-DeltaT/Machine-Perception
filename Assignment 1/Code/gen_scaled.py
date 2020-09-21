@@ -8,7 +8,7 @@ IMAGES = [
     ('data/card.png', ((0, 0), (-1, -1))),
     ('data/dugong.jpg', ((360, 195), (460, 295)))
 ]
-SCALES = [1, 1.1, 1.2, 1.25, 1.3, 1.4, 1.5, 1.6, 1.7, 1.75, 1.8, 1.9, 2]
+SCALES = [1, 1.2, 1.25, 1.4, 1.5, 1.6, 1.75, 1.8, 2]
 OUTPUT_DIR = 'generated/{}/scaled'
 OUTPUT_FILE = '{}x.png'
 

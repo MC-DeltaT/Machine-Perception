@@ -25,8 +25,7 @@ TRANSFORMS = [
 INPUT_DIR = 'generated/{}/{}'
 OUTPUT_DIR = 'results/{}/{}'
 KEYPOINT_MATCH_OUTPUT = 'keypoint_matches.png'
-SIFT_COMPARE_OUTPUT = 'sift_descriptor_compare.png'
-HOG_COMPARE_OUTPUT = 'hog_descriptor_compare.png'
+DESCRIPTOR_COMPARE_OUTPUT = 'descriptor_compare.png'
 KEYPOINT_MATCH_DIST_THRESHOLD = 1
 KEYPOINT_MATCH_ANGLE_THRESHOLD = 15
 
@@ -96,12 +95,14 @@ for base_image in BASE_IMAGES:
                 descriptor = hog.compute(region).ravel()
                 hog_descriptors[i][j] = descriptor
 
-        for descriptors, output_file in [(sift_descriptors, SIFT_COMPARE_OUTPUT), (hog_descriptors, HOG_COMPARE_OUTPUT)]:
+        pyplot.clf()
+        pyplot.xlabel(transform_axis_label)
+        pyplot.ylabel('Distance from original')
+        for descriptors, label in [(sift_descriptors, 'SIFT'), (hog_descriptors, 'HOG')]:
             distances = [numpy.linalg.norm(desc - descriptors[0]) for desc in descriptors]
-            pyplot.clf()
-            pyplot.plot(transform_vals, distances, marker='o', ls='')   # Use plot() because of autoscale bug with scatter()
-            pyplot.xlabel(transform_axis_label)
-            pyplot.ylabel('Distance from original')
-            pyplot.tight_layout()
-            output_file = os.path.join(output_dir, output_file)
-            pyplot.savefig(output_file)
+            # Use plot() because of autoscale bug with scatter()
+            pyplot.plot(transform_vals, distances, marker='o', ls='', label=label)
+        pyplot.legend()
+        pyplot.tight_layout()
+        output_file = os.path.join(output_dir, DESCRIPTOR_COMPARE_OUTPUT)
+        pyplot.savefig(output_file)
