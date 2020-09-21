@@ -19,8 +19,8 @@ def inverse_rotation(image_size, angle, keypoint):
 
 BASE_IMAGES = ['card', 'dugong']
 TRANSFORMS = [
-    ('scaled', '{}x.png', [1, 1.2, 1.4, 1.6, 1.8, 2], inverse_scale, 'Scale amount'),
-    ('rotated', '{}deg.png', [0, 15, 30, 45, 60, 75], inverse_rotation, 'Rotation angle')
+    ('scaled', '{}x.png', [1, 1.2, 1.4, 1.6, 1.8, 2], inverse_scale, 'Scale factor'),
+    ('rotated', '{}deg.png', [0, 15, 30, 45, 60, 75], inverse_rotation, 'Rotation angle (degrees)')
 ]
 INPUT_DIR = 'generated/{}/{}'
 OUTPUT_DIR = 'results/{}/{}'
