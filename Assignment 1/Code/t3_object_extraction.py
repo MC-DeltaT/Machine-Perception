@@ -5,18 +5,15 @@ from pathlib import Path
 
 def threshold_card(image):
     # Assume the background includes the black behind/around the card and the card's white bit.
-    image = image.astype(numpy.uint16)
-    # Foreground is pixels with red > blue and red > green.
-    binary = numpy.logical_and(image[:, :, 2] > image[:, :, 0] * 2, image[:, :, 2] > image[:, :, 1] * 2)
+    image = cv.cvtColor(image, cv.COLOR_BGR2HSV)
+    binary = image[:, :, 1] > 100
     return binary.astype(numpy.uint8)
 
 def threshold_dugong(image):
     # Median blur to get rid of small speckled bits in ocean.
     image = cv.medianBlur(image, 3)
-    image = image.astype(numpy.uint16)
-    # Background is pixels with blue > red and green > red.
-    binary = numpy.logical_and(image[:, :, 0] > image[:, :, 2] * 1.8, image[:, :, 1] > image[:, :, 2] * 2.2)
-    binary = numpy.logical_not(binary)
+    image = cv.cvtColor(image, cv.COLOR_BGR2HSV)
+    binary = image[:, :, 1] < 150
     return binary.astype(numpy.uint8)
 
 INPUTS = [

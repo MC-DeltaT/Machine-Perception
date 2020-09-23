@@ -1,3 +1,5 @@
+# Visualises the feature spaces used for task 4 segmentation.
+
 import cv2 as cv
 from matplotlib import pyplot
 from mpl_toolkits.mplot3d import Axes3D
@@ -8,6 +10,7 @@ from pathlib import Path
 INPUTS = ['data/card.png', 'data/dugong.jpg']
 OUTPUT_DIR = 'results/{}/segmentation'
 OUTPUT_FILE = '{}-space.png'
+SPACE_SAMPLE_STRIDE = 4
 
 def visualiser_1d(axis1):
     def inner(data, output_file):
@@ -49,7 +52,7 @@ for file in INPUTS:
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     features = [
-        ('greyscale', cv.cvtColor(image, cv.COLOR_BGR2GRAY)[:, :, numpy.newaxis], visualiser_1d('Intensity')),
+        ('intensity', cv.cvtColor(image, cv.COLOR_BGR2GRAY)[:, :, numpy.newaxis], visualiser_1d('Intensity')),
         ('rgb', image, visualiser_3d('Blue', 'Green', 'Red')),
         ('hsv', cv.cvtColor(image, cv.COLOR_BGR2HSV), visualiser_3d('Hue', 'Saturation', 'Value')),
         ('hls', cv.cvtColor(image, cv.COLOR_BGR2HLS), visualiser_3d('Hue', 'Lightness', 'Saturation')),
@@ -67,6 +70,6 @@ for file in INPUTS:
     for name, data, visualiser in features:
         data = data.reshape((data.shape[0] * data.shape[1], data.shape[2])).astype(numpy.float32)
         data = (data - numpy.min(data)) / (numpy.max(data) - numpy.min(data))
-        data_samples = data[::4]
+        data_samples = data[::SPACE_SAMPLE_STRIDE]
         output_file = os.path.join(output_dir, OUTPUT_FILE.format(name))
         visualiser(data_samples, output_file)

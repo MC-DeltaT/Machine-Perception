@@ -1,32 +1,40 @@
 # Performs k-means segmentation on the sample images, using various feature descriptors.
+# For external validation, additional human-labelled images are supplied.
 
 import cv2 as cv
+from itertools import permutations
 import numpy
 import os.path
 from pathlib import Path
 
-INPUTS = ['data/card.png', 'data/dugong.jpg']
+INPUTS = [
+    ('data/card.png', 'data/card-segment_labels.png'),
+    ('data/dugong.jpg', 'data/dugong-segment_labels.png')
+]
 OUTPUT_DIR = 'results/{}/segmentation'
 OUTPUT_FILE = '{}.png'
 PERFORMANCE_FILE = 'performance.txt'
-KMEANS_CLUSTERS = 3
-KMEANS_ITERATIONS = 200
-KMEANS_EPSILON = 0.01
-KMEANS_ATTEMPTS = 5
-SEGMENT_COLOURS = numpy.array([
+CLUSTERS = 3
+ITERATIONS = 200
+EPSILON = 0.01
+ATTEMPTS = 5
+CLUSTER_COLOURS = numpy.array([
     (255, 0, 0),
     (0, 255, 0),
     (0, 0, 255)
 ])
 
-for file in INPUTS:
-    image = cv.imread(file, cv.IMREAD_COLOR)
-    filename = os.path.splitext(os.path.basename(file))[0]
+#label_permutations = numpy.array(list(permutations(range(KMEANS_CLUSTERS))))
+for image_file, labels_file in INPUTS:
+    image = cv.imread(image_file, cv.IMREAD_COLOR)
+    filename = os.path.splitext(os.path.basename(image_file))[0]
     output_dir = OUTPUT_DIR.format(filename)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
+    correct_labels = cv.imread(labels_file, cv.IMREAD_GRAYSCALE).ravel()
+
     features = [
-        ('greyscale', cv.cvtColor(image, cv.COLOR_BGR2GRAY)[:, :, numpy.newaxis]),
+        ('intensity', cv.cvtColor(image, cv.COLOR_BGR2GRAY)[:, :, numpy.newaxis]),
         ('rgb', image),
         ('hsv', cv.cvtColor(image, cv.COLOR_BGR2HSV)),
         ('hls', cv.cvtColor(image, cv.COLOR_BGR2HLS)),
@@ -41,21 +49,33 @@ for file in INPUTS:
         ('saturation', cv.cvtColor(image, cv.COLOR_BGR2HSV)[:, :, 1][:, :, numpy.newaxis])
     ]
 
-    method_performance = []
-    for method_name, data in features:
+    feature_performances = []
+    for feature_name, data in features:
         height, width, feature_size = data.shape
         data = data.reshape((width * height, feature_size)).astype(numpy.float32)
         data = (data - numpy.min(data)) / (numpy.max(data) - numpy.min(data))
-        kmeans_criteria = (cv.TERM_CRITERIA_MAX_ITER + cv.TERM_CRITERIA_EPS, KMEANS_ITERATIONS, KMEANS_EPSILON)
+        kmeans_criteria = (cv.TERM_CRITERIA_MAX_ITER + cv.TERM_CRITERIA_EPS, ITERATIONS, EPSILON)
         kmeans_flags = cv.KMEANS_RANDOM_CENTERS
-        compactness, best_labels, centres = cv.kmeans(data, KMEANS_CLUSTERS, None, kmeans_criteria, KMEANS_ATTEMPTS, kmeans_flags)
-        best_labels = best_labels.reshape((height, width))
-        result = SEGMENT_COLOURS[best_labels]
-        output_file = os.path.join(output_dir, OUTPUT_FILE.format(method_name))
+        ssdc, labels, centres = cv.kmeans(data, CLUSTERS, None, kmeans_criteria, ATTEMPTS, kmeans_flags)
+        labels = labels.reshape((height, width))
+        result = CLUSTER_COLOURS[labels]
+        output_file = os.path.join(output_dir, OUTPUT_FILE.format(feature_name))
         cv.imwrite(output_file, result)
-        method_performance.append((method_name, compactness))
 
-    method_performance = sorted(method_performance, key=lambda t: t[1])
+        labels = labels.ravel()
+        confusion_matrix = numpy.array([numpy.bincount(labels[correct_labels == l], minlength=CLUSTERS)
+                                        for l in range(CLUSTERS)])
+        total = labels.shape[0] / 2 * (labels.shape[0] - 1)
+        points_per_class = numpy.sum(confusion_matrix, axis=1)
+        points_per_cluster = numpy.sum(confusion_matrix, axis=0)
+        tp_fp = numpy.sum(points_per_cluster / 2 * (points_per_cluster - 1))
+        tp_fn = numpy.sum(points_per_class / 2 * (points_per_class - 1))
+        tp = numpy.sum(confusion_matrix / 2 * (confusion_matrix - 1))
+        tn = total - tp_fp - tp_fn + tp
+        rand_index = (tp + tn) / total
+        feature_performances.append((feature_name, ssdc, rand_index))
+
+    feature_performances = sorted(feature_performances, key=lambda t: (t[1], t[2]))
     with open(os.path.join(output_dir, PERFORMANCE_FILE), 'w') as performance_file:
-        for method, compactness in method_performance:
-            performance_file.write(f'{method}: {round(compactness)}\n')
+        for method, ssdc, rand_index in feature_performances:
+            performance_file.write(f'{method}: {round(ssdc)}, {rand_index:.4f}\n')
