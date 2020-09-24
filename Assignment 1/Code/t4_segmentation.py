@@ -2,14 +2,13 @@
 # For external validation, additional human-labelled images are supplied.
 
 import cv2 as cv
-from itertools import permutations
 import numpy
 import os.path
 from pathlib import Path
 
 INPUTS = [
-    ('data/card.png', 'data/card-segment_labels.png'),
-    ('data/dugong.jpg', 'data/dugong-segment_labels.png')
+    ('data/card.png', 'data/card-region_labels.png'),
+    ('data/dugong.jpg', 'data/dugong-region_labels.png')
 ]
 OUTPUT_DIR = 'results/{}/segmentation'
 OUTPUT_FILE = '{}.png'
@@ -24,7 +23,6 @@ CLUSTER_COLOURS = numpy.array([
     (0, 0, 255)
 ])
 
-#label_permutations = numpy.array(list(permutations(range(KMEANS_CLUSTERS))))
 for image_file, labels_file in INPUTS:
     image = cv.imread(image_file, cv.IMREAD_COLOR)
     filename = os.path.splitext(os.path.basename(image_file))[0]

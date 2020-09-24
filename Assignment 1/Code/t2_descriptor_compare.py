@@ -34,10 +34,11 @@ hog = cv.HOGDescriptor((16, 16), (16, 16), (8, 8), (8, 8), 9)
 for base_image in BASE_IMAGES:
     for transform_name, file_template, transform_vals, inverse_transform, transform_axis_label in TRANSFORMS:
         # METHODOLOGY:
-        # To choose keypoints to examine, we first get all keypoints from all versions of the image. We then apply to
-        # the keypoints the inverse of the transformation that was applied to that image, to get the locations and
-        # orientations the keypoints "should have" if SIFT was perfectly scale/rotation invariant. Finally, we select
-        # keypoints that match in location and orientation across all versions of the image.
+        # To choose keypoints to examine, we first get all keypoints from all versions of the image.
+        # We then apply to the keypoints the inverse of the transformation that was applied to that
+        # image, to get the locations and orientations the keypoints "should have" if SIFT was
+        # perfectly scale/rotation invariant. Finally, we select keypoints that match in location
+        # and orientation across all versions of the image.
 
         input_dir = INPUT_DIR.format(base_image, transform_name)
         image_versions = len(transform_vals)
@@ -52,7 +53,8 @@ for base_image in BASE_IMAGES:
                                   for kp in actual_keypoints]
             keypoints.append(list(zip(actual_keypoints, adjusted_keypoints)))
 
-        # Find keypoints in the transformed images that match in location and orientation with the original image.
+        # Find keypoints in the transformed images that match in location and orientation with the
+        # original image.
         keypoint_matches = [[kp] for kp, _ in keypoints[0]]
         for i in range(1, image_versions):
             for j, (orig_keypoint, _) in enumerate(keypoints[0]):
@@ -61,8 +63,8 @@ for base_image in BASE_IMAGES:
                 matches = [(kp, dist, angle_diff) for kp, dist, angle_diff in matches
                            if dist < KEYPOINT_MATCH_DIST_THRESHOLD and angle_diff < KEYPOINT_MATCH_ANGLE_THRESHOLD]
                 if matches:
-                    # Only need one match, so consider the distance, angle difference, and keypoint response to
-                    # determine which is the "best" match.
+                    # Only need one match, so consider the distance, angle difference, and keypoint
+                    # response to determine which is the "best" match.
                     def match_cost(m):
                         return m[1] / KEYPOINT_MATCH_DIST_THRESHOLD + m[2] / KEYPOINT_MATCH_ANGLE_THRESHOLD - 10 * m[0].response
                     match, _, _ = min(matches, key=match_cost)
@@ -79,16 +81,19 @@ for base_image in BASE_IMAGES:
         output_file = os.path.join(output_dir, KEYPOINT_MATCH_OUTPUT)
         cv.imwrite(output_file, result)
 
-        sift_descriptors = numpy.array([sift.compute(image, keypoint_matches[i])[1] for i, image in enumerate(images)])
-        # For some reason OpenCV makes the norm 512 instead of 1, so fix that so we can compare with HOG more easily.
+        sift_descriptors = numpy.array([sift.compute(image, keypoint_matches[i])[1]
+                                        for i, image in enumerate(images)])
+        # For some reason OpenCV makes the norm 512 instead of 1, so fix that so we can compare with
+        # HOG more easily.
         sift_descriptors /= 512
 
         hog_descriptors = numpy.empty((image_versions, keypoint_matches.shape[1], 36), dtype=numpy.float)
         for i, image in enumerate(images):
             for j, keypoint in enumerate(keypoint_matches[i]):
-                # To get the HOG descriptor around the keypoint, we extract the 16x16 region around the keypoint, and
-                # calculate HOG on that (easier than calculating HOG on the whole image then extracting the region.)
-                # Need to clamp region to bounds of image (keypoint might be near edge of image).
+                # To get the HOG descriptor around the keypoint, we extract the 16x16 region around
+                # the keypoint, and calculate HOG on that (easier than calculating HOG on the whole
+                # image then extracting the region). Need to clamp region to bounds of image
+                # (keypoint might be near edge of image).
                 region_cx = numpy.clip(round(keypoint.pt[0]), 8, image.shape[1] - 8)
                 region_cy = numpy.clip(round(keypoint.pt[1]), 8, image.shape[0] - 8)
                 region = image[region_cy - 8:region_cy + 8, region_cx - 8:region_cx + 8]
