@@ -4,7 +4,7 @@ import numpy
 import os.path
 from region_detect import detect_regions
 
-NUMBER_OUTPUT_FILE = 'output/HouseNumber{}.txt'
+NUMBER_OUTPUT_FILE = 'output/House{}.txt'
 DETECTION_MODEL_FILE = 'output/detect_model.bin'
 RECOGNITION_MODEL_FILE = 'output/recognition_model.bin'
 
@@ -23,15 +23,15 @@ for input_file in glob('train/*') + glob('val/*'):
     boxes = detect_regions(image)
     result = image.copy()
     digits = []
-    for x1, y1, x2, y2 in boxes:
-        region = image_grey[y1:y2, x1:x2]
+    for x, y, w, h in boxes:
+        region = image_grey[y:y + h, x:x + w]
         _, region = cv.threshold(region, 0, 255, cv.THRESH_OTSU + cv.THRESH_TOZERO)
         region = cv.resize(region, (20, 20), interpolation=cv.INTER_CUBIC)
         region = cv.normalize(region, None, 0, 1, cv.NORM_MINMAX, cv.CV_32F)
         feature = region.ravel()
         is_digit = detection_model.predict(numpy.array([feature]))[1][0][0]
         if is_digit:
-            result = cv.rectangle(result, (x1, y1), (x2, y2), (0, 255, 0), 1)
+            result = cv.rectangle(result, (x, y), (x + w, y + h), (0, 255, 0), 1)
             digit = recognition_model.predict(numpy.array([feature]))[1][0][0]
             digits.append(int(digit))
 
