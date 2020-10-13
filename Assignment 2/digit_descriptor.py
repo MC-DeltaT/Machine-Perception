@@ -1,6 +1,11 @@
 import cv2 as cv
 
 
+__all__ = [
+    'digit_descriptor'
+]
+
+
 # Produces a feature descriptor for an digit image that is used for recognition.
 def digit_descriptor(image):
     # Convert to greyscale, colour information isn't that important (always light digit on dark

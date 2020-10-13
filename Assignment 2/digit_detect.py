@@ -3,10 +3,15 @@ from math import hypot, radians
 import numpy
 
 
+__all__ = [
+    'detect_regions',
+    'select_number'
+]
+
+
 # Finds regions that are possibly digits.
 def detect_regions(image):
     image_grey = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-    image_grey = cv.normalize(image_grey, None, 0, 255, cv.NORM_MINMAX)
 
     mser = cv.MSER_create()
     _, boxes = mser.detectRegions(image_grey)
@@ -21,8 +26,9 @@ def detect_regions(image):
         if not 0.2 < w / h < 0.8:
             continue
 
-        # Try to grow region until it covers entire foreground area. If this can't be done, assume
-        # it's not a digit.
+        # Try to grow region until it covers entire foreground area. This filters out regions that
+        # are sub-regions of other regions (occurs very often with MSER).
+        # TODO: grow until centre connected component is covered
         ok = False
         for growth in range(0, 6):
             x1 = max(0, x - growth)
@@ -78,13 +84,10 @@ def select_number(image, boxes):
     if len(boxes) <= 1:
         return boxes
 
-    # TODO: refactor
-    # TODO: drop lines with any boxes that differ in height significantly
     # TODO: drop lines with any boxes that differ in colour significantly
-    # TODO: sort boxes by x
 
     # Find all possible lines with endpoints at box centres.
-    lines = numpy.zeros((len(boxes), len(boxes), 2, 2), numpy.float)
+    lines = []
     for i, box1 in enumerate(boxes):
         c1x = box1[0] + box1[2] / 2
         c1y = box1[1] + box1[3] / 2
@@ -92,61 +95,61 @@ def select_number(image, boxes):
             if i != j:
                 c2x = box2[0] + box2[2] / 2
                 c2y = box2[1] + box2[3] / 2
-                lines[i, j] = [[c1x, c1y], [c2x, c2y]]
+                lines.append(((c1x, c1y), (c2x, c2y)))
+    line_count = len(lines)
+    lines = numpy.array(lines)
 
     # Associate each line with a set of boxes that intersect it.
-    intersecting_boxes = numpy.empty((len(boxes), len(boxes)), numpy.object)
-    box_counts = numpy.zeros((len(boxes), len(boxes)), numpy.uint16)
-    for i, j in numpy.ndindex(len(boxes), len(boxes)):
+    intersecting_boxes = []
+    for line in lines:
         tmp = []
-        if i != j:
-            line = lines[i, j]
-            for box in boxes:
-                x1, y1, w, h = box
-                x2 = x1 + w
-                y2 = y1 + h
-                box_lines = [((x1, y1), (x2, y1)),
-                             ((x1, y1), (x1, y2)),
-                             ((x1, y2), (x2, y2)),
-                             ((x2, y1), (x2, y2))]
-                if any(lines_intersect(l, line) for l in box_lines):
-                    tmp.append(box)
-        intersecting_boxes[i, j] = tmp
-        box_counts[i, j] = len(tmp)
+        for box in boxes:
+            x1, y1, w, h = box
+            x2 = x1 + w
+            y2 = y1 + h
+            box_lines = [((x1, y1), (x2, y1)),
+                         ((x1, y1), (x1, y2)),
+                         ((x1, y2), (x2, y2)),
+                         ((x2, y1), (x2, y2))]
+            if any(_lines_intersect(l, line) for l in box_lines):
+                tmp.append(box)
+        # Sort boxes by x coordinate, since digits run from left to right.
+        tmp = sorted(tmp, key=lambda b: b[0])
+        intersecting_boxes.append(tmp)
+
+    box_counts = [len(bs) for bs in intersecting_boxes]
 
     # Compute various statistics on the lines' boxes.
-    heights = numpy.empty((len(boxes), len(boxes)), numpy.object)
-    height_variations = numpy.zeros((len(boxes), len(boxes)), numpy.float)
-    average_heights = numpy.zeros((len(boxes), len(boxes)), numpy.float)
-    for i, j in numpy.ndindex(len(boxes), len(boxes)):
-        if i != j:
-            hs = numpy.array([b[3] for b in intersecting_boxes[i, j]])
-            avg_h = numpy.mean(hs)
-            height_variations[i, j] = numpy.mean(numpy.abs(hs - avg_h))
-            heights[i, j] = hs
-            average_heights[i, j] = avg_h
-    line_angles = numpy.arctan2(lines[:, :, 1, 1] - lines[:, :, 0, 1], lines[:, :, 1, 0] - lines[:, :, 0, 0])
+    heights = [numpy.array([b[3] for b in bs]) for bs in intersecting_boxes]
+    # Work with the median height rather than the mean height, so outliers have less impact and can
+    # be detected more easily.
+    median_heights = numpy.array([numpy.median(hs) for hs in heights])
+    height_variations = [numpy.abs(heights[i] - median_heights[i]) for i in range(line_count)]
+    # Find any lines that have at least 1 box with large variation in height from the others.
+    big_height_variation = numpy.array(
+        [any(height_variations[i] / median_heights[i] > 0.25) for i in range(line_count)])
 
-    line_filter = numpy.zeros((len(boxes), len(boxes)), numpy.bool)
-    numpy.fill_diagonal(line_filter, True)
+    line_angles = numpy.arctan2(lines[:, 1, 1] - lines[:, 0, 1], lines[:, 1, 0] - lines[:, 0, 0])
+
+    line_filter = numpy.zeros(len(lines), numpy.bool)
     # Select only roughly horizontal lines.
     line_filter[numpy.abs(line_angles) > radians(20)] = True
     # Remove lines whose boxes have large height variation.
-    line_filter[height_variations > average_heights * 0.2] = True
+    line_filter[big_height_variation] = True
     # Select the line with the tallest boxes (assume the house number digits are always bigger than
     # any other text).
-    line_filter[average_heights / numpy.ma.max(numpy.ma.masked_array(average_heights, line_filter)) < 0.8] = True
+    line_filter[median_heights / numpy.ma.max(numpy.ma.masked_array(median_heights, line_filter)) < 0.75] = True
     # Select the line with the most boxes.
     line_filter[box_counts < numpy.ma.max(numpy.ma.masked_array(box_counts, line_filter))] = True
     if numpy.all(line_filter):
         return None
     else:
-        best_line = numpy.unravel_index(numpy.argmin(line_filter), line_filter.shape)
+        best_line = numpy.argmin(line_filter)
         return intersecting_boxes[best_line]
 
 
 # Checks if 2 line segments (defined by endpoints) intersect.
-def lines_intersect(line1, line2):
+def _lines_intersect(line1, line2):
     # Solve for line parameters s, t for intersection.
     d1 = (line1[1][0] - line1[0][0], line1[1][1] - line1[0][1])
     d2 = (line2[1][0] - line2[0][0], line2[1][1] - line2[0][1])

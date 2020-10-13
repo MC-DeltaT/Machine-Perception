@@ -3,7 +3,6 @@ from digit_descriptor import digit_descriptor
 from digit_detect import detect_regions, select_number
 import numpy
 from os import listdir
-import os.path
 from pathlib import Path
 from sys import argv
 
@@ -12,29 +11,38 @@ NUMBER_TEXT_OUTPUT_FILE = 'House-{}.txt'
 NUMBER_IMAGE_OUTPUT_FILE = 'DetectedArea-{}.jpg'
 BOUNDING_BOX_OUTPUT_FILE = 'BoundingBox-{}.txt'
 IMAGE_EXTENSIONS = ('.jpg', '.png')
+MAX_IMAGE_SIZE = 500
 
 
 if len(argv) != 4:
     print('Usage: python3 house_number_extract.py <input_dir> <recognition_model_file> <output_dir>')
     exit(1)
 
-input_dir = argv[1]
+input_dir = Path(argv[1])
 recognition_model_file = argv[2]
-output_dir = argv[3]
+output_dir = Path(argv[3])
 
-Path(output_dir).mkdir(parents=True, exist_ok=True)
+output_dir.mkdir(parents=True, exist_ok=True)
 
 recognition_model = cv.ml.SVM_load(recognition_model_file)
 for entry in listdir(input_dir):
-    filename, ext = os.path.splitext(entry)
-    if ext not in IMAGE_EXTENSIONS:
+    file_path = input_dir / Path(entry)
+    filename = file_path.stem
+    if file_path.suffix not in IMAGE_EXTENSIONS:
         continue
-    file_path = os.path.join(input_dir, entry)
-    image = cv.imread(file_path, cv.IMREAD_COLOR)
+    image = cv.imread(str(file_path), cv.IMREAD_COLOR)
+
+    # Downscale large images for reliable MSER detection and performance reasons.
+    max_dim = max(image.shape[0], image.shape[1])
+    if max_dim > MAX_IMAGE_SIZE:
+        scale = MAX_IMAGE_SIZE / max_dim
+        image = cv.resize(image, None, fx=scale, fy=scale)
+
     image_grey = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
     boxes = detect_regions(image)
     boxes = select_number(image, boxes)
+
     digits = []
     for x, y, w, h in boxes:
         region = image_grey[y:y + h, x:x + w]
@@ -49,14 +57,14 @@ for entry in listdir(input_dir):
     width = x2 - x1
     height = y2 - y1
 
-    output_file = os.path.join(output_dir, BOUNDING_BOX_OUTPUT_FILE.format(filename))
+    output_file = output_dir / BOUNDING_BOX_OUTPUT_FILE.format(filename)
     with open(output_file, 'w') as file:
         file.write(f'{x1}, {y1}, {width}, {height}')
 
-    output_file = os.path.join(output_dir, NUMBER_IMAGE_OUTPUT_FILE.format(filename))
+    output_file = output_dir / NUMBER_IMAGE_OUTPUT_FILE.format(filename)
     number_region = image[y1:y2, x1:x2]
-    cv.imwrite(output_file, number_region)
+    cv.imwrite(str(output_file), number_region)
 
-    output_file = os.path.join(output_dir, NUMBER_TEXT_OUTPUT_FILE.format(filename))
+    output_file = output_dir / NUMBER_TEXT_OUTPUT_FILE.format(filename)
     with open(output_file, 'w') as file:
         file.write('Building ' + ''.join(map(str, digits)))
