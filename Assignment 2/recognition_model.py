@@ -1,37 +1,36 @@
 import cv2 as cv
 import numpy
+from pathlib import Path
+from random import randrange
 
-DIGITS_FILE = 'training_digits.png'
-MODEL_OUTPUT_FILE = 'output/recognition_model.bin'
-DIGIT_SIZE = 20
-DIGITS = 10
-DIGIT_ROWS = 5
 
-digits = cv.imread(DIGITS_FILE, cv.IMREAD_GRAYSCALE)
-rows = [digits[i * DIGIT_SIZE: (i + 1) * DIGIT_SIZE] for i in range(DIGITS * DIGIT_ROWS)]
-rows = [r.T.reshape((-1, DIGIT_SIZE, DIGIT_SIZE)) for r in rows]
-digits = numpy.array([numpy.concatenate(rows[i * DIGIT_ROWS:(i + 1) * DIGIT_ROWS], 0) for i in range(DIGITS)])
-labels = numpy.array([numpy.full((d.shape[0]), l, numpy.int) for l, d in enumerate(digits)])
+INPUTS_FILE = 'generated/digit_recognition_training_inputs.npy'
+LABELS_FILE = 'generated/digit_recognition_training_labels.npy'
+MODEL_OUTPUT_FILE = Path('generated/recognition_model.xml')
 
-features = digits.reshape((digits.shape[0], digits.shape[1], DIGIT_SIZE * DIGIT_SIZE)).astype(numpy.float32)
-mins = numpy.min(features, 2)
-maxs = numpy.max(features, 2)
-features = (features - mins[:, :, numpy.newaxis]) / (maxs - mins)[:, :, numpy.newaxis]
 
-training_inputs, test_inputs = numpy.split(features, 2, 1)
-training_inputs = training_inputs.reshape((training_inputs.shape[0] * training_inputs.shape[1], -1))
-test_inputs = test_inputs.reshape((test_inputs.shape[0] * test_inputs.shape[1], -1))
-training_labels, test_labels = numpy.split(labels, 2, 1)
-training_labels = training_labels.ravel()
-test_labels = test_labels.ravel()
+inputs = numpy.load(INPUTS_FILE)
+labels = numpy.load(LABELS_FILE)
+
+# random_seed = randrange(2 ** 32 - 1)
+# numpy.random.default_rng(random_seed).shuffle(inputs)
+# numpy.random.default_rng(random_seed).shuffle(labels)
+#
+# training_inputs, test_inputs = numpy.split(inputs, 2)
+# training_labels, test_labels = numpy.split(labels, 2)
+#
+# print(f'Training dataset size: {training_inputs.shape[0]}')
+# print(f'Test dataset size: {test_inputs.shape[0]}')
+# print()
 
 svm = cv.ml.SVM_create()
-svm.setKernel(cv.ml.SVM_RBF)
+svm.setKernel(cv.ml.SVM_LINEAR)
 svm.setType(cv.ml.SVM_C_SVC)
-svm.trainAuto(training_inputs, cv.ml.ROW_SAMPLE, training_labels)
-svm.save(MODEL_OUTPUT_FILE)
+svm.trainAuto(inputs, cv.ml.ROW_SAMPLE, labels)
+MODEL_OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+svm.save(str(MODEL_OUTPUT_FILE))
 
-for name, inputs, labels in [('training', training_inputs, training_labels), ('test', test_inputs, test_labels)]:
+for name, inputs, labels in [('training', inputs, labels)]:
     predictions = svm.predict(inputs)[1]
     predictions = predictions.ravel()
     accuracy = numpy.sum(predictions == labels) / inputs.shape[0]

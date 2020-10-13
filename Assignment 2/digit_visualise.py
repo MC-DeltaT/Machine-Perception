@@ -4,7 +4,9 @@ import os.path
 from pathlib import Path
 from digit_detect import detect_regions, select_number
 
+
 OUTPUT_DIR = 'output/number_detection'
+
 
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 for input_file in glob('data/full/train/*'):

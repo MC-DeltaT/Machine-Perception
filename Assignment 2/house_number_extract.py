@@ -1,43 +1,62 @@
 import cv2 as cv
-from glob import glob
+from digit_descriptor import digit_descriptor
+from digit_detect import detect_regions, select_number
 import numpy
+from os import listdir
 import os.path
-from region_detect import detect_regions
+from pathlib import Path
+from sys import argv
 
-NUMBER_OUTPUT_FILE = 'output/House{}.txt'
-DETECTION_MODEL_FILE = 'output/detect_model.bin'
-RECOGNITION_MODEL_FILE = 'output/recognition_model.bin'
 
-detection_model = cv.ml.SVM_load(DETECTION_MODEL_FILE)
-recognition_model = cv.ml.SVM_load(RECOGNITION_MODEL_FILE)
-for input_file in glob('train/*') + glob('val/*'):
-    filename = os.path.splitext(os.path.basename(input_file))[0]
-    image = cv.imread(input_file, cv.IMREAD_COLOR)
-    # Scale down large images for performance reasons.
-    max_dim = max(image.shape[0], image.shape[1])
-    if max_dim > 500:
-        scale = 500 / max_dim
-        image = cv.resize(image, (0, 0), None, scale, scale)
+NUMBER_TEXT_OUTPUT_FILE = 'House-{}.txt'
+NUMBER_IMAGE_OUTPUT_FILE = 'DetectedArea-{}.jpg'
+BOUNDING_BOX_OUTPUT_FILE = 'BoundingBox-{}.txt'
+IMAGE_EXTENSIONS = ('.jpg', '.png')
+
+
+if len(argv) != 4:
+    print('Usage: python3 house_number_extract.py <input_dir> <recognition_model_file> <output_dir>')
+    exit(1)
+
+input_dir = argv[1]
+recognition_model_file = argv[2]
+output_dir = argv[3]
+
+Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+recognition_model = cv.ml.SVM_load(recognition_model_file)
+for entry in listdir(input_dir):
+    filename, ext = os.path.splitext(entry)
+    if ext not in IMAGE_EXTENSIONS:
+        continue
+    file_path = os.path.join(input_dir, entry)
+    image = cv.imread(file_path, cv.IMREAD_COLOR)
     image_grey = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
     boxes = detect_regions(image)
-    result = image.copy()
+    boxes = select_number(image, boxes)
     digits = []
     for x, y, w, h in boxes:
         region = image_grey[y:y + h, x:x + w]
-        _, region = cv.threshold(region, 0, 255, cv.THRESH_OTSU + cv.THRESH_TOZERO)
-        region = cv.resize(region, (20, 20), interpolation=cv.INTER_CUBIC)
-        region = cv.normalize(region, None, 0, 1, cv.NORM_MINMAX, cv.CV_32F)
-        feature = region.ravel()
-        is_digit = detection_model.predict(numpy.array([feature]))[1][0][0]
-        if is_digit:
-            result = cv.rectangle(result, (x, y), (x + w, y + h), (0, 255, 0), 1)
-            digit = recognition_model.predict(numpy.array([feature]))[1][0][0]
-            digits.append(int(digit))
+        descriptor = digit_descriptor(region)
+        digit = recognition_model.predict(numpy.array([descriptor]))[1][0][0]
+        digits.append(int(digit))
 
-    output_file = f'output/{filename}.png'
-    cv.imwrite(output_file, result)
+    x1 = min(b[0] for b in boxes)
+    x2 = max(b[0] + b[2] for b in boxes)
+    y1 = min(b[1] for b in boxes)
+    y2 = max(b[1] + b[3] for b in boxes)
+    width = x2 - x1
+    height = y2 - y1
 
-    output_file = NUMBER_OUTPUT_FILE.format(filename)
+    output_file = os.path.join(output_dir, BOUNDING_BOX_OUTPUT_FILE.format(filename))
     with open(output_file, 'w') as file:
-        file.write('Building number ' + ''.join(map(str, digits)))
+        file.write(f'{x1}, {y1}, {width}, {height}')
+
+    output_file = os.path.join(output_dir, NUMBER_IMAGE_OUTPUT_FILE.format(filename))
+    number_region = image[y1:y2, x1:x2]
+    cv.imwrite(output_file, number_region)
+
+    output_file = os.path.join(output_dir, NUMBER_TEXT_OUTPUT_FILE.format(filename))
+    with open(output_file, 'w') as file:
+        file.write('Building ' + ''.join(map(str, digits)))

@@ -81,6 +81,7 @@ def select_number(image, boxes):
     # TODO: refactor
     # TODO: drop lines with any boxes that differ in height significantly
     # TODO: drop lines with any boxes that differ in colour significantly
+    # TODO: sort boxes by x
 
     # Find all possible lines with endpoints at box centres.
     lines = numpy.zeros((len(boxes), len(boxes), 2, 2), numpy.float)
