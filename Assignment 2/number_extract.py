@@ -1,5 +1,7 @@
+# Functions for extracting the digits and house numbers.
+
 import cv2 as cv
-from math import hypot, radians
+from math import hypot, radians, sqrt
 import numpy
 
 
@@ -25,6 +27,19 @@ def detect_regions(image):
         # Digits typically have aspect ratios < 1, but not too close to 0.
         if not 0.2 < w / h < 0.8:
             continue
+
+        # TODO? remove
+        # Digits consist of 2 non-similar colours (light and dark). Want to filter out regions that
+        # don't have this.
+        # region = image[y:y + h, x:x + w]
+        # data = cv.normalize(region, None, 0, 1, cv.NORM_MINMAX, cv.CV_32F).reshape((-1, 3))
+        # criteria = (cv.TERM_CRITERIA_MAX_ITER + cv.TERM_CRITERIA_EPS, 25, 0.01)
+        # flags = cv.KMEANS_RANDOM_CENTERS
+        # compactness, _, centroids = cv.kmeans(data, 2, None, criteria, 5, flags)
+        # c1, c2 = centroids
+        # # Centroids must differ by at least 0.5 in one dimension.
+        # if numpy.linalg.norm(c2 - c1) < sqrt(0.5):
+        #     continue
 
         # Try to grow region until it covers entire foreground area. This filters out regions that
         # are sub-regions of other regions (occurs very often with MSER).
@@ -99,6 +114,8 @@ def select_number(image, boxes):
     line_count = len(lines)
     lines = numpy.array(lines)
 
+    line_angles = numpy.arctan2(lines[:, 1, 1] - lines[:, 0, 1], lines[:, 1, 0] - lines[:, 0, 0])
+
     # Associate each line with a set of boxes that intersect it.
     intersecting_boxes = []
     for line in lines:
@@ -119,26 +136,31 @@ def select_number(image, boxes):
 
     box_counts = [len(bs) for bs in intersecting_boxes]
 
-    # Compute various statistics on the lines' boxes.
-    heights = [numpy.array([b[3] for b in bs]) for bs in intersecting_boxes]
-    # Work with the median height rather than the mean height, so outliers have less impact and can
-    # be detected more easily.
-    median_heights = numpy.array([numpy.median(hs) for hs in heights])
-    height_variations = [numpy.abs(heights[i] - median_heights[i]) for i in range(line_count)]
-    # Find any lines that have at least 1 box with large variation in height from the others.
-    big_height_variation = numpy.array(
-        [any(height_variations[i] / median_heights[i] > 0.25) for i in range(line_count)])
+    box_xs = [numpy.array([b[0] + b[2] / 2 for b in bs]) for bs in intersecting_boxes]
+    x_diffs = [numpy.diff(xs) for xs in box_xs]
+    x_diff_diffs = [numpy.diff(xds) for xds in x_diffs]
 
-    line_angles = numpy.arctan2(lines[:, 1, 1] - lines[:, 0, 1], lines[:, 1, 0] - lines[:, 0, 0])
+    # Compute various statistics on the lines' box heights.
+    heights = [numpy.array([b[3] for b in bs]) for bs in intersecting_boxes]
+    height_means = numpy.array([numpy.mean(hs) for hs in heights])
+    height_diffs = [numpy.diff(hs) for hs in heights]
 
     line_filter = numpy.zeros(len(lines), numpy.bool)
     # Select only roughly horizontal lines.
-    line_filter[numpy.abs(line_angles) > radians(20)] = True
+    line_filter[numpy.abs(line_angles) > NUMBER_LINE_ANGLE_THRESHOLD] = True
     # Remove lines whose boxes have large height variation.
-    line_filter[big_height_variation] = True
-    # Select the line with the tallest boxes (assume the house number digits are always bigger than
+    has_height_outliers = numpy.array(
+        [numpy.any(numpy.abs(hds) / hs[:-1] > NUMBER_BOX_HEIGHT_DIFF_THRESHOLD)
+         for hs, hds in zip(heights, height_diffs)])
+    line_filter[has_height_outliers] = True
+    # Remove lines whose boxes are not spaced evenly in the X axis.
+    has_x_outliers = numpy.array(
+        [numpy.any(numpy.abs(xdds) / xds[:-1] > NUMBER_BOX_X_DIFF_THRESHOLD)
+         for xds, xdds in zip(x_diffs, x_diff_diffs)])
+    line_filter[has_x_outliers] = True
+    # Select the lines with the tallest boxes (assume the house number digits are always bigger than
     # any other text).
-    line_filter[median_heights / numpy.ma.max(numpy.ma.masked_array(median_heights, line_filter)) < 0.75] = True
+    line_filter[height_means / numpy.ma.max(numpy.ma.masked_array(height_means, line_filter)) < NUMBER_TALL_THRESHOLD] = True
     # Select the line with the most boxes.
     line_filter[box_counts < numpy.ma.max(numpy.ma.masked_array(box_counts, line_filter))] = True
     if numpy.all(line_filter):
@@ -146,6 +168,12 @@ def select_number(image, boxes):
     else:
         best_line = numpy.argmin(line_filter)
         return intersecting_boxes[best_line]
+
+
+NUMBER_BOX_X_DIFF_THRESHOLD = 0.5
+NUMBER_BOX_HEIGHT_DIFF_THRESHOLD = 0.25
+NUMBER_LINE_ANGLE_THRESHOLD = radians(20)
+NUMBER_TALL_THRESHOLD = 0.8
 
 
 # Checks if 2 line segments (defined by endpoints) intersect.

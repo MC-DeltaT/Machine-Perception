@@ -1,6 +1,6 @@
 import cv2 as cv
 from digit_descriptor import digit_descriptor
-from digit_detect import detect_regions, select_number
+from number_extract import detect_regions, select_number
 import numpy
 from os import listdir
 from pathlib import Path
@@ -10,12 +10,14 @@ from sys import argv
 NUMBER_TEXT_OUTPUT_FILE = 'House-{}.txt'
 NUMBER_IMAGE_OUTPUT_FILE = 'DetectedArea-{}.jpg'
 BOUNDING_BOX_OUTPUT_FILE = 'BoundingBox-{}.txt'
+REGION_BOX_OUTPUT_FILE = 'RegionBoxes-{}.png'
 IMAGE_EXTENSIONS = ('.jpg', '.png')
 MAX_IMAGE_SIZE = 500
+OUTPUT_REGION_BOXES = True
 
 
 if len(argv) != 4:
-    print('Usage: python3 house_number_extract.py <input_dir> <recognition_model_file> <output_dir>')
+    print('Usage: python3 extract_house_numbers.py <input_dir> <recognition_model_file> <output_dir>')
     exit(1)
 
 input_dir = Path(argv[1])
@@ -23,8 +25,8 @@ recognition_model_file = argv[2]
 output_dir = Path(argv[3])
 
 output_dir.mkdir(parents=True, exist_ok=True)
-
 recognition_model = cv.ml.SVM_load(recognition_model_file)
+
 for entry in listdir(input_dir):
     file_path = input_dir / Path(entry)
     filename = file_path.stem
@@ -41,14 +43,26 @@ for entry in listdir(input_dir):
     image_grey = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
     boxes = detect_regions(image)
+
+    if OUTPUT_REGION_BOXES:
+        result = image.copy()
+        for x, y, w, h in boxes:
+            result = cv.rectangle(result, (x, y), (x + w, y + h), (0, 255, 0), 1)
+        output_file = output_dir / REGION_BOX_OUTPUT_FILE.format(filename)
+        cv.imwrite(str(output_file), result)
+
     boxes = select_number(image, boxes)
+
+    if not boxes:
+        print(f'No house number detected for {filename}')
+        continue
 
     digits = []
     for x, y, w, h in boxes:
         region = image_grey[y:y + h, x:x + w]
         descriptor = digit_descriptor(region)
-        digit = recognition_model.predict(numpy.array([descriptor]))[1][0][0]
-        digits.append(int(digit))
+        digit = int(recognition_model.predict(numpy.array([descriptor]))[1][0][0])
+        digits.append(digit)
 
     x1 = min(b[0] for b in boxes)
     x2 = max(b[0] + b[2] for b in boxes)

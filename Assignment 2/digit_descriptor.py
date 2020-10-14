@@ -1,3 +1,5 @@
+# Defines the descriptor used for digit recognition.
+
 import cv2 as cv
 
 

@@ -1,3 +1,5 @@
+# Trains and saves the SVM used to recognise digits.
+
 import cv2 as cv
 import numpy
 from pathlib import Path
