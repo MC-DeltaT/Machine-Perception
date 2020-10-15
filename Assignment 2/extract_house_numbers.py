@@ -13,7 +13,7 @@ BOUNDING_BOX_OUTPUT_FILE = 'BoundingBox-{}.txt'
 REGION_BOX_OUTPUT_FILE = 'RegionBoxes-{}.png'
 IMAGE_EXTENSIONS = ('.jpg', '.png')
 MAX_IMAGE_SIZE = 500
-OUTPUT_REGION_BOXES = True
+OUTPUT_REGION_BOXES = False
 
 
 if len(argv) != 4:
@@ -40,10 +40,9 @@ for entry in listdir(input_dir):
         scale = MAX_IMAGE_SIZE / max_dim
         image = cv.resize(image, None, fx=scale, fy=scale)
 
-    image_grey = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-
     boxes = detect_regions(image)
 
+    # Output detected regions for debugging.
     if OUTPUT_REGION_BOXES:
         result = image.copy()
         for x, y, w, h in boxes:
@@ -59,7 +58,7 @@ for entry in listdir(input_dir):
 
     digits = []
     for x, y, w, h in boxes:
-        region = image_grey[y:y + h, x:x + w]
+        region = image[y:y + h, x:x + w]
         descriptor = digit_descriptor(region)
         digit = int(recognition_model.predict(numpy.array([descriptor]))[1][0][0])
         digits.append(digit)
