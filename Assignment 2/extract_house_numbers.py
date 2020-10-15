@@ -1,9 +1,7 @@
 import cv2 as cv
-from digit_descriptor import digit_descriptor
-from number_extract import detect_regions, select_number
-import numpy
 from os import listdir
 from pathlib import Path
+from pipeline import HouseNumberRecognitionPipeline
 from sys import argv
 
 
@@ -12,8 +10,7 @@ NUMBER_IMAGE_OUTPUT_FILE = 'DetectedArea-{}.jpg'
 BOUNDING_BOX_OUTPUT_FILE = 'BoundingBox-{}.txt'
 REGION_BOX_OUTPUT_FILE = 'RegionBoxes-{}.png'
 IMAGE_EXTENSIONS = ('.jpg', '.png')
-MAX_IMAGE_SIZE = 500
-OUTPUT_REGION_BOXES = False
+OUTPUT_REGION_BOXES = True
 
 
 if len(argv) != 4:
@@ -24,8 +21,8 @@ input_dir = Path(argv[1])
 recognition_model_file = argv[2]
 output_dir = Path(argv[3])
 
+pipeline = HouseNumberRecognitionPipeline(recognition_model_file)
 output_dir.mkdir(parents=True, exist_ok=True)
-recognition_model = cv.ml.SVM_load(recognition_model_file)
 
 for entry in listdir(input_dir):
     file_path = input_dir / Path(entry)
@@ -34,39 +31,24 @@ for entry in listdir(input_dir):
         continue
     image = cv.imread(str(file_path), cv.IMREAD_COLOR)
 
-    # Downscale large images for reliable MSER detection and performance reasons.
-    max_dim = max(image.shape[0], image.shape[1])
-    if max_dim > MAX_IMAGE_SIZE:
-        scale = MAX_IMAGE_SIZE / max_dim
-        image = cv.resize(image, None, fx=scale, fy=scale)
-
-    boxes = detect_regions(image)
+    result = pipeline.process(image)
 
     # Output detected regions for debugging.
     if OUTPUT_REGION_BOXES:
-        result = image.copy()
-        for x, y, w, h in boxes:
-            result = cv.rectangle(result, (x, y), (x + w, y + h), (0, 255, 0), 1)
+        output = image.copy()
+        for x, y, w, h in result.plausible_boxes:
+            output = cv.rectangle(output, (x, y), (x + w, y + h), (0, 255, 0), 1)
         output_file = output_dir / REGION_BOX_OUTPUT_FILE.format(filename)
-        cv.imwrite(str(output_file), result)
+        cv.imwrite(str(output_file), output)
 
-    boxes = select_number(image, boxes)
-
-    if not boxes:
+    if not result.house_number:
         print(f'No house number detected for {filename}')
         continue
 
-    digits = []
-    for x, y, w, h in boxes:
-        region = image[y:y + h, x:x + w]
-        descriptor = digit_descriptor(region)
-        digit = int(recognition_model.predict(numpy.array([descriptor]))[1][0][0])
-        digits.append(digit)
-
-    x1 = min(b[0] for b in boxes)
-    x2 = max(b[0] + b[2] for b in boxes)
-    y1 = min(b[1] for b in boxes)
-    y2 = max(b[1] + b[3] for b in boxes)
+    x1 = min(b[0] for b in result.house_number_boxes)
+    x2 = max(b[0] + b[2] for b in result.house_number_boxes)
+    y1 = min(b[1] for b in result.house_number_boxes)
+    y2 = max(b[1] + b[3] for b in result.house_number_boxes)
     width = x2 - x1
     height = y2 - y1
 
@@ -79,5 +61,6 @@ for entry in listdir(input_dir):
     cv.imwrite(str(output_file), number_region)
 
     output_file = output_dir / NUMBER_TEXT_OUTPUT_FILE.format(filename)
+    house_number = ''.join(map(str, result.house_number))
     with open(output_file, 'w') as file:
-        file.write('Building ' + ''.join(map(str, digits)))
+        file.write('Building ' + house_number)

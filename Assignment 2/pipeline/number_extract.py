@@ -1,0 +1,244 @@
+# Functions for extracting the digits and house numbers.
+
+import cv2 as cv
+from itertools import product
+from math import atan2, hypot, radians
+import numpy
+from typing import Sequence, Tuple
+
+
+__all__ = [
+    'detect_regions',
+    'select_number'
+]
+
+
+BoundingBox = Tuple[float, float, float, float]
+
+
+# Finds regions that are possibly digits.
+def detect_regions(image: numpy.ndarray) -> Sequence[BoundingBox]:
+    image_grey = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+
+    max_area = int(image_grey.shape[0] * image_grey.shape[1] * REGION_AREA_MAX)
+
+    mser = cv.MSER_create(_min_area=REGION_AREA_MIN, _max_area=max_area)
+    msers, boxes = mser.detectRegions(image_grey)
+
+    adjusted_boxes = []
+    for box, points in zip(boxes, msers):
+        x, y, w, h = box
+
+        # OpenCV's MSER area bounds don't seem to always work.
+        if not REGION_AREA_MIN <= w * h <= max_area:
+            continue
+
+        # Filter out regions with aspect ratios unlikely to occur for digits.
+        if not REGION_ASPECT_RATIO_RANGE[0] <= w / h <= REGION_ASPECT_RATIO_RANGE[1]:
+            continue
+
+        # Further processing and recognition assumes that the digit is the foreground (i.e. light on
+        # a dark background) in the local area. But MSER can produce regions that are dark on a
+        # light background, so need to filter out those.
+        if not _region_is_foreground(image_grey, box, points):
+            continue
+
+        # Filters out regions that are sub-regions of other regions (occurs very often with MSER).
+        is_subregion, box = _is_subregion(image_grey, box)
+        if is_subregion:
+            continue
+
+        adjusted_boxes.append(box)
+
+    # Remove boxes are are basically the same.
+    adjusted_boxes = _remove_equivalent_boxes(adjusted_boxes)
+
+    return adjusted_boxes
+
+
+# Selects the regions (from detect_regions()) that form the house number.
+def select_number(image: numpy.ndarray, boxes: Sequence[BoundingBox]) -> Sequence[BoundingBox]:
+    if len(boxes) <= 1:
+        return boxes
+
+    boxes = sorted(boxes, key=lambda b: b[0])
+
+    paths = []
+    for i, box1 in enumerate(boxes):
+        p = [box1]
+        c1x = box1[0] + box1[2] / 2
+        c1y = box1[1] + box1[3] / 2
+        for j in range(i + 1, len(boxes)):
+            box2 = boxes[j]
+            c2x = box2[0] + box2[2] / 2
+            c2y = box2[1] + box2[3] / 2
+            # Create only roughly horizontal paths.
+            angle = atan2(c2y - c1y, c2x - c1x)
+            if abs(angle) <= NUMBER_LINE_ANGLE_THRESHOLD:
+                # Select only boxes that are near to the previous box in the X axis.
+                if c2x - (p[-1][0] + p[-1][2] / 2) <= 3 * max(b[2] for b in p):
+                    # Select only boxes that have similar height to the previous box.
+                    if abs(p[-1][3] - box2[3]) / box2[3] <= 0.25:
+                        p.append(box2)
+                    else:
+                        break
+                else:
+                    break
+        paths.append(p)
+    path_lengths = [len(p) for p in paths]
+    box_heights = [numpy.array([b[3] for b in p]) for p in paths]
+    box_height_means = numpy.array([numpy.mean(hs) for hs in box_heights])
+
+    # path_filter = numpy.zeros(len(paths), numpy.bool)
+    if False: #numpy.all(path_filter):
+        return []
+    else:
+        best_path = numpy.argmax(path_lengths)
+        return paths[best_path]
+
+
+# Checks if a significant amount of pixels in a region are foreground when considering the local area.
+def _region_is_foreground(image_grey: numpy.ndarray, box: BoundingBox, points: numpy.ndarray) -> bool:
+    x, y, w, h = box
+    region_grey = image_grey[y:y + h, x:x + w]
+    _, binary = cv.threshold(region_grey, 0, 1, cv.THRESH_OTSU)
+    indices = numpy.flip(points - [x, y], 1)
+    fg_points = binary.ravel()[numpy.ravel_multi_index((indices[:, 0], indices[:, 1]), binary.shape)]
+    region_fg_ratio = numpy.average(fg_points)
+    return region_fg_ratio >= REGION_FG_RATIO_THRESHOLD
+
+
+# Checks if a region's foreground is part of a larger object.
+def _is_subregion(image_grey: numpy.ndarray, box: BoundingBox) -> Tuple[bool, BoundingBox]:
+    x1, y1, w, h = box
+    x2 = x1 + w
+    y2 = y1 + h
+    is_subregion = False
+    # Try to grow region side by side until it covers entire foreground area.
+    for axis, direction in product(((1, 0), (0, 1)), (-1, 1)):
+        for _ in range(0, REGION_GROWTH + 1):
+            prev_x1 = x1
+            prev_y1 = y1
+            prev_x2 = x2
+            prev_y2 = y2
+            if direction < 0:
+                x1 = max(x1 - axis[0], 0)
+                y1 = max(y1 - axis[1], 0)
+            elif direction > 0:
+                x2 = min(x2 + axis[0], image_grey.shape[1])
+                y2 = min(y2 + axis[1], image_grey.shape[0])
+
+            region_grey = image_grey[y1:y2, x1:x2]
+            region_grey = cv.normalize(region_grey, None, 0, 255, cv.NORM_MINMAX)
+
+            _, binary = cv.threshold(region_grey, 0, 1, cv.THRESH_OTSU)
+            # Find label of foreground point closest the to centre of the region.
+            fg_indices = numpy.argwhere(binary)
+            centre_index = (binary.shape[0] / 2, binary.shape[1] / 2)
+            fg_centre_index = fg_indices[
+                numpy.argmin(numpy.linalg.norm(fg_indices - centre_index, axis=1))]
+            _, labels = cv.connectedComponents(binary)
+            centre_label = labels[fg_centre_index[0], fg_centre_index[1]]
+            assert centre_label > 0
+
+            # Check if the centre foreground component touches the border of the box.
+            border_mask = numpy.zeros_like(region_grey, numpy.bool)
+            if direction < 0 and axis[0]:
+                border_mask[:, 0] = True
+            elif direction > 0 and axis[0]:
+                border_mask[:, -1] = True
+            elif direction < 0 and axis[1]:
+                border_mask[0, :] = True
+            elif direction > 0 and axis[1]:
+                border_mask[-1, :] = True
+            border_labels = labels[border_mask]
+            if numpy.all(border_labels != centre_label):
+                # Not subregion is this axis and direction.
+                # Revert box so we don't get a 1 pixel gap around the foreground.
+                x1 = prev_x1
+                y1 = prev_y1
+                x2 = prev_x2
+                y2 = prev_y2
+                break
+        else:
+            is_subregion = True
+            break
+    return is_subregion, (x1, y1, x2 - x1, y2 - y1)
+
+
+# Find all the groups of boxes that are effectively the same, and from those groups chooses only
+# the regions with minimal area.
+def _remove_equivalent_boxes(boxes: Sequence[BoundingBox]) -> Sequence[BoundingBox]:
+    boxes = list(set(boxes))
+    centres = [(x + w / 2, y + h / 2) for x, y, w, h in boxes]
+    equivalencies = []
+    for i, (box1, (c1x, c1y)) in enumerate(zip(boxes, centres)):
+        tmp = {box1}
+        for j, (box2, (c2x, c2y)) in enumerate(zip(boxes, centres)):
+            if box1 is not box2:
+                # Consider boxes to be the same if their centres are close.
+                distance = hypot(c1x - c2x, c1y - c2y)
+                if distance < EQUIVALENT_BOX_DISTANCE:
+                    tmp.add(box2)
+        equivalencies.append(tmp)
+    for _ in equivalencies:
+        for e1 in equivalencies:
+            for e2 in equivalencies:
+                if e1 != e2:
+                    if any(b in e1 for b in e2):
+                        for b in e2:
+                            e1.add(b)
+    boxes = list(set(min(e, key=lambda b: b[2] * b[3]) for e in equivalencies))
+    return boxes
+
+
+Point = Tuple[float, float]
+Line = Tuple[Point, Point]
+
+
+# Finds all boxes that intersect or contain a line segment.
+def _boxes_intersecting_line(line: Line, boxes: Sequence[BoundingBox]) -> Sequence[BoundingBox]:
+    # Checks if a point lies within a box.
+    def point_in_box(point: Point, box: BoundingBox) -> bool:
+        return box[0] <= point[0] <= box[0] + box[2] and box[1] <= point[1] <= box[1] + box[3]
+
+    # Checks if 2 line segments (defined by endpoints) intersect.
+    def lines_intersect(line1: Line, line2: Line) -> bool:
+        # Solve for line parameters s, t for intersection.
+        d1 = (line1[1][0] - line1[0][0], line1[1][1] - line1[0][1])
+        d2 = (line2[1][0] - line2[0][0], line2[1][1] - line2[0][1])
+        a = [[d1[0], -d2[0]],
+             [d1[1], -d2[1]]]
+        b = [line2[0][0] - line1[0][0], line2[0][1] - line1[0][1]]
+        try:
+            s, t = numpy.linalg.solve(a, b)
+        except numpy.linalg.LinAlgError:
+            # No solution, no intersection.
+            return False
+        else:
+            # Intersection if solution lies within the line segments
+            return 0 <= s <= 1 and 0 <= t <= 1
+
+    intersecting_boxes = set()
+    for box in boxes:
+        if point_in_box(line[0], box) or point_in_box(line[1], box):
+            intersecting_boxes.add(box)
+        x1, y1, w, h = box
+        x2 = x1 + w
+        y2 = y1 + h
+        box_lines = [((x1, y1), (x2, y1)),
+                     ((x1, y1), (x1, y2)),
+                     ((x1, y2), (x2, y2)),
+                     ((x2, y1), (x2, y2))]
+        if any(lines_intersect(l, line) for l in box_lines):
+            intersecting_boxes.add(box)
+    return list(intersecting_boxes)
+
+
+REGION_AREA_MIN = 50
+REGION_AREA_MAX = 0.5 * 0.5
+REGION_ASPECT_RATIO_RANGE = (0.2, 0.8)
+REGION_FG_RATIO_THRESHOLD = 0.75
+REGION_GROWTH = 5
+EQUIVALENT_BOX_DISTANCE = 5
+NUMBER_LINE_ANGLE_THRESHOLD = radians(20)

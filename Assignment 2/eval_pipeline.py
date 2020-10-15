@@ -1,38 +1,52 @@
 # Evaluates the performance of the full pipeline.
 
+import cv2 as cv
 from os import listdir
 from pathlib import Path
-import re
+from pipeline import HouseNumberRecognitionPipeline
 from sys import argv
 
 
-if len(argv) != 3:
-    print('Usage: python3 eval_pipeline.py <pipeline_output_dir> <correct_numbers_file>')
+IMAGE_EXTENSIONS = ('.jpg', '.png')
+
+
+if len(argv) != 4:
+    print('Usage: python3 eval_pipeline.py <input_dir> <recognition_model_file> <correct_numbers_file>')
     exit(1)
 
-pipeline_output_dir = Path(argv[1])
-correct_numbers_file = Path(argv[2])
+input_dir = Path(argv[1])
+recognition_model_file = argv[2]
+correct_numbers_file = Path(argv[3])
+
+pipeline = HouseNumberRecognitionPipeline(recognition_model_file)
 
 with open(correct_numbers_file) as file:
     correct_numbers = eval(file.read())
 
-total = 0
-incorrect = []
-for entry in listdir(pipeline_output_dir):
-    match = re.fullmatch('House-(.+)\\.txt', entry)
-    if not match:
+results = []
+for entry in listdir(input_dir):
+    file_path = input_dir / Path(entry)
+    filename = file_path.stem
+    if file_path.suffix not in IMAGE_EXTENSIONS:
         continue
-    file_path = pipeline_output_dir / entry
-    with open(file_path) as file:
-        predicted_number = file.read().rstrip()[9:]
-    image_name = match.group(1)
-    correct_number = correct_numbers[image_name]
-    if predicted_number != correct_number:
-        incorrect.append((image_name, predicted_number, correct_number))
-    total += 1
+    image = cv.imread(str(file_path), cv.IMREAD_COLOR)
 
-correct = total - len(incorrect)
-print(f'Accuracy: {round(100 * correct / total, 2)}%')
+    result = pipeline.process(image)
+    house_number = ''.join(map(str, result.house_number))
+
+    results.append((filename, house_number, correct_numbers[filename]))
+
+correct = [r for r in results if r[1] == r[2]]
+incorrect = [r for r in results if r[1] != r[2]]
+
+total = len(correct) + len(incorrect)
+print(f'Accuracy: {round(100 * len(correct) / total, 2)}%')
+
+if correct:
+    print()
+    print('Correct:')
+    for image_name, predicted_number, correct_number in correct:
+        print(f'\t{image_name}: c={correct_number}, p={predicted_number}')
 
 if incorrect:
     print()
