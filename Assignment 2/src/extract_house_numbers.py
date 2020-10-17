@@ -8,9 +8,7 @@ from sys import argv
 NUMBER_TEXT_OUTPUT_FILE = 'House-{}.txt'
 NUMBER_IMAGE_OUTPUT_FILE = 'DetectedArea-{}.jpg'
 BOUNDING_BOX_OUTPUT_FILE = 'BoundingBox-{}.txt'
-REGION_BOX_OUTPUT_FILE = 'RegionBoxes-{}.png'
 IMAGE_EXTENSIONS = ('.jpg', '.png')
-OUTPUT_REGION_BOXES = True
 
 
 if len(argv) != 4:
@@ -32,14 +30,6 @@ for entry in listdir(input_dir):
     image = cv.imread(str(file_path), cv.IMREAD_COLOR)
 
     result = pipeline.process(image)
-
-    # Output detected regions for debugging.
-    if OUTPUT_REGION_BOXES:
-        output = image.copy()
-        for x, y, w, h in result.plausible_boxes:
-            output = cv.rectangle(output, (x, y), (x + w, y + h), (0, 255, 0), 1)
-        output_file = output_dir / REGION_BOX_OUTPUT_FILE.format(filename)
-        cv.imwrite(str(output_file), output)
 
     if not result.house_number:
         print(f'No house number detected for {filename}')

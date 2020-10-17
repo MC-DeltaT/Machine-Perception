@@ -7,4 +7,4 @@ output_dir="$project_dir/output"
 model_file="$project_dir/generated/recognition_model.xml"
 
 rm -rf "$output_dir"
-python3 extract_house_numbers.py "$input_dir" "$model_file" "$output_dir"
+python3 src/extract_house_numbers.py "$input_dir" "$model_file" "$output_dir"

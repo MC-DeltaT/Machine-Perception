@@ -13,8 +13,8 @@ __all__ = [
 ]
 
 
-# Loads the digit recognition training data provided on Blackboard.
-def load_recognition_training_data(input_dir) -> Tuple[numpy.ndarray, numpy.ndarray]:
+# Loads the digit recognition training data provided from Blackboard.
+def load_recognition_training_data(input_dir: Path) -> Tuple[numpy.ndarray, numpy.ndarray]:
     inputs = []
     labels = []
     for i in range(10):
@@ -29,7 +29,7 @@ def load_recognition_training_data(input_dir) -> Tuple[numpy.ndarray, numpy.ndar
             labels.append(i)
 
     inputs = numpy.array(inputs, numpy.float32)
-    labels = numpy.array(labels)
+    labels = numpy.array(labels, numpy.int32)
     return inputs, labels
 
 
