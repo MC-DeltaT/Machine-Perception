@@ -19,7 +19,7 @@ class DigitRecognitionModel:
             self.svm = cv.ml.SVM_load(file_path)
 
     def train(self, inputs: numpy.ndarray, labels: numpy.ndarray) -> None:
-        self.svm.trainAuto(inputs, cv.ml.ROW_SAMPLE, labels)
+        self.svm.trainAuto(inputs, cv.ml.ROW_SAMPLE, labels, 4)
 
     def predict_single(self, input: numpy.ndarray) -> int:
         return int(self.svm.predict(numpy.array([input]))[1][0][0])

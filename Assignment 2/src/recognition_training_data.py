@@ -23,7 +23,7 @@ def load_recognition_training_data(input_dir: Path) -> Tuple[numpy.ndarray, nump
             file_path = directory / Path(entry)
             if file_path.suffix not in IMAGE_EXTENSIONS:
                 continue
-            image = cv.imread(str(file_path), cv.IMREAD_COLOR)
+            image = cv.imread(str(file_path), cv.IMREAD_GRAYSCALE)
             descriptor = digit_descriptor(image)
             inputs.append(descriptor)
             labels.append(i)

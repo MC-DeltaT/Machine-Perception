@@ -9,24 +9,31 @@ from typing import Sequence, Tuple
 
 __all__ = [
     'detect_regions',
+    'filter_regions',
     'select_number'
 ]
 
 
 BoundingBox = Tuple[float, float, float, float]
+Point = Tuple[float, float]
+Line = Tuple[Point, Point]
+
+
+# Finds MSERS.
+def detect_regions(image_grey: numpy.ndarray):
+    max_area = int(image_grey.shape[0] * image_grey.shape[1] * REGION_AREA_MAX)
+    mser = cv.MSER_create(MSER_DELTA, REGION_AREA_MIN, max_area)
+    msers, boxes = mser.detectRegions(image_grey)
+    return boxes, msers
 
 
 # Finds regions that are possibly digits.
-def detect_regions(image: numpy.ndarray) -> Sequence[BoundingBox]:
-    image_grey = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-
+def filter_regions(image_grey: numpy.ndarray, region_boxes: Sequence[BoundingBox],
+                   region_points: numpy.ndarray) -> Sequence[BoundingBox]:
     max_area = int(image_grey.shape[0] * image_grey.shape[1] * REGION_AREA_MAX)
 
-    mser = cv.MSER_create(_min_area=REGION_AREA_MIN, _max_area=max_area)
-    msers, boxes = mser.detectRegions(image_grey)
-
     adjusted_boxes = []
-    for box, points in zip(boxes, msers):
+    for box, points in zip(region_boxes, region_points):
         x, y, w, h = box
 
         # OpenCV's MSER area bounds don't seem to always work.
@@ -49,9 +56,9 @@ def detect_regions(image: numpy.ndarray) -> Sequence[BoundingBox]:
         if _has_multiple_components(region_grey):
             continue
 
-        # Filters out regions that are sub-regions of other regions (occurs very often with MSER).
-        is_subregion, box = _is_subregion(image_grey, box)
-        if is_subregion:
+        # Filters out regions whose foreground is not isolated.
+        is_isolated, box = _is_foreground_isolated(image_grey, box)
+        if not is_isolated:
             continue
 
         adjusted_boxes.append(box)
@@ -63,7 +70,7 @@ def detect_regions(image: numpy.ndarray) -> Sequence[BoundingBox]:
 
 
 # Selects the regions (from detect_regions()) that form the house number.
-def select_number(image: numpy.ndarray, boxes: Sequence[BoundingBox]) -> Sequence[BoundingBox]:
+def select_number(boxes: Sequence[BoundingBox]) -> Sequence[BoundingBox]:
     if len(boxes) <= 1:
         return boxes
 
@@ -79,12 +86,11 @@ def select_number(image: numpy.ndarray, boxes: Sequence[BoundingBox]) -> Sequenc
             c2x = box2[0] + box2[2] / 2
             c2y = box2[1] + box2[3] / 2
             # Create only roughly horizontal paths.
-            angle = atan2(c2y - c1y, c2x - c1x)
-            if abs(angle) <= NUMBER_LINE_ANGLE_THRESHOLD:
+            if abs(atan2(c2y - c1y, c2x - c1x)) <= NUMBER_PATH_ANGLE_THRESHOLD:
                 # Select only boxes that are near to the previous box in the X axis.
                 if c2x - (p[-1][0] + p[-1][2] / 2) <= 3 * max(b[2] for b in p):
                     # Select only boxes that have similar height to the previous box.
-                    if abs(p[-1][3] - box2[3]) / box2[3] <= 0.25:
+                    if abs(p[-1][3] - box2[3]) / box2[3] <= NUMBER_PATH_HEIGHT_DIFF_THRESHOLD:
                         p.append(box2)
                     else:
                         break
@@ -122,12 +128,12 @@ def _has_multiple_components(region_grey: numpy.ndarray) -> bool:
     return numpy.count_nonzero(significant_components) > 1
 
 
-# Checks if a region's foreground is part of a larger object.
-def _is_subregion(image_grey: numpy.ndarray, box: BoundingBox) -> Tuple[bool, BoundingBox]:
+# Checks if a region's foreground is not part of a larger object.
+def _is_foreground_isolated(image_grey: numpy.ndarray, box: BoundingBox) -> Tuple[bool, BoundingBox]:
     x1, y1, w, h = box
     x2 = x1 + w
     y2 = y1 + h
-    is_subregion = False
+    is_subregion = False    # TODO: fix semantics
     # Try to grow region side by side until it covers entire foreground area.
     for axis, direction in product(((1, 0), (0, 1)), (-1, 1)):
         for _ in range(0, REGION_GROWTH + 1):
@@ -172,7 +178,7 @@ def _is_subregion(image_grey: numpy.ndarray, box: BoundingBox) -> Tuple[bool, Bo
         else:
             is_subregion = True
             break
-    return is_subregion, (x1, y1, x2 - x1, y2 - y1)
+    return not is_subregion, (x1, y1, x2 - x1, y2 - y1)
 
 
 # Find all the groups of boxes that are effectively the same, and from those groups chooses only
@@ -201,49 +207,7 @@ def _remove_equivalent_boxes(boxes: Sequence[BoundingBox]) -> Sequence[BoundingB
     return boxes
 
 
-Point = Tuple[float, float]
-Line = Tuple[Point, Point]
-
-
-# Finds all boxes that intersect or contain a line segment.
-def _boxes_intersecting_line(line: Line, boxes: Sequence[BoundingBox]) -> Sequence[BoundingBox]:
-    # Checks if a point lies within a box.
-    def point_in_box(point: Point, box: BoundingBox) -> bool:
-        return box[0] <= point[0] <= box[0] + box[2] and box[1] <= point[1] <= box[1] + box[3]
-
-    # Checks if 2 line segments (defined by endpoints) intersect.
-    def lines_intersect(line1: Line, line2: Line) -> bool:
-        # Solve for line parameters s, t for intersection.
-        d1 = (line1[1][0] - line1[0][0], line1[1][1] - line1[0][1])
-        d2 = (line2[1][0] - line2[0][0], line2[1][1] - line2[0][1])
-        a = [[d1[0], -d2[0]],
-             [d1[1], -d2[1]]]
-        b = [line2[0][0] - line1[0][0], line2[0][1] - line1[0][1]]
-        try:
-            s, t = numpy.linalg.solve(a, b)
-        except numpy.linalg.LinAlgError:
-            # No solution, no intersection.
-            return False
-        else:
-            # Intersection if solution lies within the line segments
-            return 0 <= s <= 1 and 0 <= t <= 1
-
-    intersecting_boxes = set()
-    for box in boxes:
-        if point_in_box(line[0], box) or point_in_box(line[1], box):
-            intersecting_boxes.add(box)
-        x1, y1, w, h = box
-        x2 = x1 + w
-        y2 = y1 + h
-        box_lines = [((x1, y1), (x2, y1)),
-                     ((x1, y1), (x1, y2)),
-                     ((x1, y2), (x2, y2)),
-                     ((x2, y1), (x2, y2))]
-        if any(lines_intersect(l, line) for l in box_lines):
-            intersecting_boxes.add(box)
-    return list(intersecting_boxes)
-
-
+MSER_DELTA = 15
 REGION_AREA_MIN = 50        # Pixels
 REGION_AREA_MAX = 0.5 * 0.5     # Fraction of image area
 REGION_ASPECT_RATIO_RANGE = (0.2, 0.8)
@@ -251,5 +215,6 @@ REGION_FG_RATIO_THRESHOLD = 0.75
 REGION_SIGNIFICANT_COMPONENT_AREA_THRESHOLD = 0.05   # Fraction of largest component's area
 REGION_GROWTH = 5       # Pixels
 EQUIVALENT_BOX_DISTANCE = 5     # Pixels
-NUMBER_LINE_ANGLE_THRESHOLD = radians(20)
+NUMBER_PATH_ANGLE_THRESHOLD = radians(20)
+NUMBER_PATH_HEIGHT_DIFF_THRESHOLD = 0.25    # Fraction of current box
 NUMBER_TALL_THRESHOLD = 0.75    # Fraction of tallest boxes' height

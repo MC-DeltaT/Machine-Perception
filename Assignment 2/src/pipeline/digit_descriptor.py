@@ -10,10 +10,7 @@ __all__ = [
 
 
 # Produces a feature descriptor for an digit image that is used for recognition.
-def digit_descriptor(image: numpy.ndarray) -> numpy.ndarray:
-    # Convert to greyscale, colour information isn't important (always light digit on dark background).
-    image_grey = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-
+def digit_descriptor(image_grey: numpy.ndarray) -> numpy.ndarray:
     # Crop the image to just the foreground area.
     _, binary = cv.threshold(image_grey, 0, 255, cv.THRESH_OTSU)
     x, y, w, h = cv.boundingRect(binary)

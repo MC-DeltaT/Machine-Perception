@@ -29,7 +29,7 @@ for entry in listdir(input_dir):
     filename = file_path.stem
     if file_path.suffix not in IMAGE_EXTENSIONS:
         continue
-    image = cv.imread(str(file_path), cv.IMREAD_COLOR)
+    image = cv.imread(str(file_path), cv.IMREAD_GRAYSCALE)
 
     result = pipeline.process(image)
     house_number = ''.join(map(str, result.house_number))
