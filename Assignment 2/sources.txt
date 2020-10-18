@@ -1,5 +1,0 @@
-http://ufldl.stanford.edu/housenumbers/nips2011_housenumbers.pdf
-https://ai.stanford.edu/~ang/papers/icdar01-TextRecognitionUnsupervisedFeatureLearning.pdf
-https://doi.org/10.1016/j.neucom.2015.07.135
-https://link.springer.com/chapter/10.1007/978-3-642-19318-7_60
-https://arxiv.org/pdf/1312.6082.pdf

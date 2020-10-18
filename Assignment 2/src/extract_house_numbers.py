@@ -61,7 +61,7 @@ for entry in listdir(input_dir):
 
     output_file = output_dir / NUMBER_BOX_OUTPUT_FILE.format(filename)
     with open(output_file, 'w') as file:
-        file.write(f'{x1}, {y1}, {width}, {height}')
+        file.write(f'{x1}, {y1}, {width}, {height}\n')
 
     output_file = output_dir / NUMBER_IMAGE_OUTPUT_FILE.format(filename)
     number_region = image[y1:y2, x1:x2]
@@ -70,4 +70,4 @@ for entry in listdir(input_dir):
     output_file = output_dir / NUMBER_TEXT_OUTPUT_FILE.format(filename)
     house_number = ''.join(map(str, result.house_number))
     with open(output_file, 'w') as file:
-        file.write('Building ' + house_number)
+        file.write(f'Building {house_number}\n')

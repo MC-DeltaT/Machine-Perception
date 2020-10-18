@@ -133,7 +133,7 @@ def _is_foreground_isolated(image_grey: numpy.ndarray, box: BoundingBox) -> Tupl
     x1, y1, w, h = box
     x2 = x1 + w
     y2 = y1 + h
-    is_subregion = False    # TODO: fix semantics
+    is_isolated = True
     # Try to grow region side by side until it covers entire foreground area.
     for axis, direction in product(((1, 0), (0, 1)), (-1, 1)):
         for _ in range(0, REGION_GROWTH + 1):
@@ -168,7 +168,7 @@ def _is_foreground_isolated(image_grey: numpy.ndarray, box: BoundingBox) -> Tupl
                 border_mask[-1, :] = True
             border_labels = labels[border_mask]
             if numpy.all(border_labels != fg_label):
-                # Not subregion is this axis and direction.
+                # Isolated in this axis and direction.
                 # Revert box so we don't get a 1 pixel gap around the foreground.
                 x1 = prev_x1
                 y1 = prev_y1
@@ -176,9 +176,9 @@ def _is_foreground_isolated(image_grey: numpy.ndarray, box: BoundingBox) -> Tupl
                 y2 = prev_y2
                 break
         else:
-            is_subregion = True
+            is_isolated = False
             break
-    return not is_subregion, (x1, y1, x2 - x1, y2 - y1)
+    return is_isolated, (x1, y1, x2 - x1, y2 - y1)
 
 
 # Find all the groups of boxes that are effectively the same, and from those groups chooses only

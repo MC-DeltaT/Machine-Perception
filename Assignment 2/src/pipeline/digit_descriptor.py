@@ -26,4 +26,4 @@ def digit_descriptor(image_grey: numpy.ndarray) -> numpy.ndarray:
     return descriptor
 
 
-_hog = cv.HOGDescriptor((16, 16), (16, 16), (8, 8), (8, 8), 9)
+_hog = cv.HOGDescriptor((32, 32), (16, 16), (8, 8), (8, 8), 9)

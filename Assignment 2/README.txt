@@ -1,4 +1,4 @@
-Machine Perception Assignment 2: House Number Recognition
+Machine Perception Assignment 2 - House Number Recognition
 Author: Reece Jones
 
 
@@ -16,6 +16,7 @@ Project Files:
         extract_house_numbers.py - Does the main assignment task.
         recognition_training_data.py - Loads the digit recognition training dataset.
         train_recognition_model.py - Trains and saves the digit recognition SVM.
+    Report.pdf - Assignment report.
     task.sh - As required by the assignment specification.
     training_eval.sh - Evaluates the performance of the pipeline on the training images.
     validation_eval.sh - Evaluates the performance of the pipeline on the validation images.
