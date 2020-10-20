@@ -20,3 +20,6 @@ Project Files:
     task.sh - As required by the assignment specification.
     training_eval.sh - Evaluates the performance of the pipeline on the training images.
     validation_eval.sh - Evaluates the performance of the pipeline on the validation images.
+
+    Note that the label digit images provided on Blackboard have not been included in the project.
+    If you wish to run the train_recognition_model.py script, you must provide the folder yourself.
