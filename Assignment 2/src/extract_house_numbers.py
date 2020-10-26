@@ -52,19 +52,25 @@ for entry in listdir(input_dir):
         print(f'No house number detected for {filename}')
         continue
 
-    x1 = min(b[0] for b in result.house_number_regions)
-    x2 = max(b[0] + b[2] for b in result.house_number_regions)
-    y1 = min(b[1] for b in result.house_number_regions)
-    y2 = max(b[1] + b[3] for b in result.house_number_regions)
-    width = x2 - x1
-    height = y2 - y1
+    house_number_x1 = min(b[0] for b in result.house_number_regions)
+    house_number_x2 = max(b[0] + b[2] for b in result.house_number_regions)
+    house_number_y1 = min(b[1] for b in result.house_number_regions)
+    house_number_y2 = max(b[1] + b[3] for b in result.house_number_regions)
+    house_number_width = house_number_x2 - house_number_x1
+    house_number_height = house_number_y2 - house_number_y1
 
     output_file = output_dir / NUMBER_BOX_OUTPUT_FILE.format(filename)
     with open(output_file, 'w') as file:
-        file.write(f'{x1}, {y1}, {width}, {height}\n')
+        file.write(f'{house_number_x1}, {house_number_y1}, {house_number_width}, {house_number_height}\n')
 
     output_file = output_dir / NUMBER_IMAGE_OUTPUT_FILE.format(filename)
-    number_region = image[y1:y2, x1:x2]
+    number_region = image[house_number_y1:house_number_y2, house_number_x1:house_number_x2]
+    for x, y, w, h in result.house_number_regions:
+        x1 = x - house_number_x1
+        y1 = y - house_number_y1
+        x2 = min(x1 + w, number_region.shape[1] - 1)
+        y2 = min(y1 + h, number_region.shape[0] - 1)
+        number_region = cv.rectangle(number_region, (x1, y1), (x2, y2), (0, 255, 0), 1)
     cv.imwrite(str(output_file), number_region)
 
     output_file = output_dir / NUMBER_TEXT_OUTPUT_FILE.format(filename)
